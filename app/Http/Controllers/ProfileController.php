@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\ProfileUpdateRequest;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
+use App\Services\ImageStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Redirect;
@@ -38,6 +39,19 @@ class ProfileController extends Controller
         $request->user()->save();
 
         return Redirect::route('profile.edit');
+    }
+
+    public function updateAvatar(Request $request): RedirectResponse
+    {
+        $request->validate(['avatar' => ['required', 'image', 'max:8192']]);
+
+        $user = $request->user();
+        ImageStorage::delete($user->avatar_path);
+        $user->update([
+            'avatar_path' => ImageStorage::store($request->file('avatar'), 'avatars', 256),
+        ]);
+
+        return back();
     }
 
     /**

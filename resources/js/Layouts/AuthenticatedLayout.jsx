@@ -53,9 +53,17 @@ export default function AuthenticatedLayout({ header, children }) {
                         <Dropdown.Trigger>
                             <button
                                 type="button"
-                                className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-800"
+                                className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-emerald-100 text-sm font-bold text-emerald-800"
                             >
-                                {user.name.charAt(0).toUpperCase()}
+                                {user.avatar_url ? (
+                                    <img
+                                        src={user.avatar_url}
+                                        alt={user.name}
+                                        className="h-full w-full object-cover"
+                                    />
+                                ) : (
+                                    user.name.charAt(0).toUpperCase()
+                                )}
                             </button>
                         </Dropdown.Trigger>
                         <Dropdown.Content>
@@ -64,6 +72,12 @@ export default function AuthenticatedLayout({ header, children }) {
                             </div>
                             <Dropdown.Link href={route('profile.edit')}>
                                 Mi perfil
+                            </Dropdown.Link>
+                            <Dropdown.Link href={route('categories.index')}>
+                                Categorías
+                            </Dropdown.Link>
+                            <Dropdown.Link href={route('products.index')}>
+                                Productos
                             </Dropdown.Link>
                             <Dropdown.Link
                                 href={route('logout')}

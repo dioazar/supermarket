@@ -3,12 +3,14 @@ import { useCallback, useEffect, useState } from 'react';
 import {
     Alert,
     FlatList,
+    Image,
     Linking,
     Platform,
     Pressable,
     Share,
     StyleSheet,
     Text,
+    TextInput,
     View,
 } from 'react-native';
 import {
@@ -27,7 +29,15 @@ type Item = {
     id: number;
     quantity: number;
     status: 'pending' | 'checked' | 'missing';
-    product: { id: number; name: string; unit: string };
+    product: { id: number; name: string; unit: string; image_url?: string | null };
+};
+
+type Settlement = {
+    expenses: { id: number; user_id: number; user: string; amount: number; note: string | null }[];
+    total: number;
+    share: number;
+    balances: { user_id: number; name: string; paid: number; balance: number }[];
+    transfers: { from: string; to: string; amount: number; phrase: string }[];
 };
 
 type Detail = {
@@ -41,6 +51,7 @@ type Detail = {
     items: Item[];
     members: { id: number; name: string; email: string; role: string }[];
     my_role: string;
+    expenses: Settlement;
     can: { edit: boolean; share: boolean; delete: boolean };
 };
 
@@ -65,11 +76,18 @@ export default function ListDetail() {
     const [productName, setProductName] = useState('');
     const [quantity, setQuantity] = useState('1');
     const [pickerOpen, setPickerOpen] = useState(false);
+    const [editingList, setEditingList] = useState(false);
+    const [editName, setEditName] = useState('');
+    const [editRecurrence, setEditRecurrence] = useState('');
+    const [qtyEditId, setQtyEditId] = useState<number | null>(null);
+    const [qtyDraft, setQtyDraft] = useState('');
     const [sharing, setSharing] = useState(false);
     const [shareEmail, setShareEmail] = useState('');
     const [shareRole, setShareRole] = useState('list-editor');
     const [rolePickerOpen, setRolePickerOpen] = useState(false);
     const [error, setError] = useState('');
+    const [expenseAmount, setExpenseAmount] = useState('');
+    const [expenseNote, setExpenseNote] = useState('');
     const [onlineStores, setOnlineStores] = useState<
         { id: number; name: string; website: string }[]
     >([]);
@@ -118,7 +136,7 @@ export default function ListDetail() {
 
     if (!detail) return <Loading />;
 
-    const { list, items, members, can } = detail;
+    const { list, items, members, can, expenses } = detail;
     const checked = items.filter((item) => item.status === 'checked').length;
 
     const setStatus = async (item: Item, status: Item['status']) => {
@@ -140,6 +158,64 @@ export default function ListDetail() {
         }
     };
 
+    const openEditList = () => {
+        setEditName(list.name);
+        setEditRecurrence(list.recurrence_days ? String(list.recurrence_days) : '');
+        setError('');
+        setEditingList(true);
+    };
+
+    const saveList = async () => {
+        setError('');
+        try {
+            await api(`/lists/${list.id}`, {
+                method: 'PATCH',
+                body: {
+                    name: editName.trim(),
+                    recurrence_days: editRecurrence ? Number(editRecurrence) : null,
+                },
+            });
+            setEditingList(false);
+            load();
+        } catch (e) {
+            setError(e instanceof ApiError ? e.message : 'Error');
+        }
+    };
+
+    const changeQuantity = async (item: Item, newQuantity: number) => {
+        if (!(newQuantity > 0)) return;
+        setDetail((current) =>
+            current
+                ? {
+                      ...current,
+                      items: current.items.map((i) =>
+                          i.id === item.id ? { ...i, quantity: newQuantity } : i,
+                      ),
+                  }
+                : current,
+        );
+        try {
+            await api(`/items/${item.id}`, {
+                method: 'PATCH',
+                body: { quantity: newQuantity },
+            });
+        } catch {
+            load();
+        }
+    };
+
+    const commitQtyDraft = (item: Item) => {
+        const value = Number(qtyDraft.replace(',', '.'));
+        setQtyEditId(null);
+        if (value > 0 && value !== item.quantity) changeQuantity(item, value);
+    };
+
+    const resetList = () =>
+        confirmAction('¿Marcar todo como pendiente?', async () => {
+            await api(`/lists/${list.id}/reset`, { method: 'POST' });
+            load();
+        });
+
     const addItem = async () => {
         setError('');
         try {
@@ -159,6 +235,18 @@ export default function ListDetail() {
         } catch (e) {
             setError(e instanceof ApiError ? e.message : 'Error');
         }
+    };
+
+    const addExpense = async () => {
+        const amount = Number(expenseAmount);
+        if (!amount) return;
+        await api(`/lists/${list.id}/expenses`, {
+            method: 'POST',
+            body: { amount, note: expenseNote.trim() || null },
+        });
+        setExpenseAmount('');
+        setExpenseNote('');
+        load();
     };
 
     const share = async () => {
@@ -223,6 +311,51 @@ export default function ListDetail() {
                                 onPress={() => setShoppingMode(!shoppingMode)}
                             />
                         )}
+
+                        {can.edit && !shoppingMode && !editingList && (
+                            <Button
+                                title="✏️ Editar lista"
+                                variant="secondary"
+                                onPress={openEditList}
+                            />
+                        )}
+
+                        {can.edit && !shoppingMode && editingList && (
+                            <Card style={{ gap: 10 }}>
+                                <Input
+                                    label="Nombre de la lista"
+                                    value={editName}
+                                    onChangeText={setEditName}
+                                    placeholder="Ej: Compra semanal"
+                                />
+                                <Input
+                                    label="Repetir cada X días (opcional)"
+                                    value={editRecurrence}
+                                    onChangeText={setEditRecurrence}
+                                    keyboardType="number-pad"
+                                    placeholder="7"
+                                />
+                                {error !== '' && (
+                                    <Text style={{ color: colors.danger }}>{error}</Text>
+                                )}
+                                <Button title="Guardar cambios" onPress={saveList} />
+                                <Button
+                                    title="Cancelar"
+                                    variant="secondary"
+                                    onPress={() => setEditingList(false)}
+                                />
+                            </Card>
+                        )}
+
+                        {can.edit &&
+                            !shoppingMode &&
+                            items.some((item) => item.status !== 'pending') && (
+                                <Button
+                                    title="↺ Reiniciar compra (todo pendiente)"
+                                    variant="secondary"
+                                    onPress={resetList}
+                                />
+                            )}
 
                         {can.edit && !shoppingMode && !adding && (
                             <Button
@@ -298,10 +431,60 @@ export default function ListDetail() {
                                 >
                                     {item.product.name}
                                 </Text>
-                                <Text style={{ color: colors.muted, fontSize: 12 }}>
-                                    {item.quantity} {item.product.unit}
-                                    {item.status === 'missing' ? ' · no había' : ''}
-                                </Text>
+                                {can.edit && !shoppingMode ? (
+                                    <View style={styles.qtyRow}>
+                                        <Pressable
+                                            onPress={() =>
+                                                changeQuantity(item, item.quantity - 1)
+                                            }
+                                            disabled={item.quantity <= 1}
+                                            style={[
+                                                styles.qtyButton,
+                                                item.quantity <= 1 && { opacity: 0.35 },
+                                            ]}
+                                        >
+                                            <Text style={styles.qtyButtonText}>−</Text>
+                                        </Pressable>
+                                        {qtyEditId === item.id ? (
+                                            <TextInput
+                                                value={qtyDraft}
+                                                onChangeText={setQtyDraft}
+                                                keyboardType="decimal-pad"
+                                                autoFocus
+                                                selectTextOnFocus
+                                                onBlur={() => commitQtyDraft(item)}
+                                                onSubmitEditing={() =>
+                                                    commitQtyDraft(item)
+                                                }
+                                                style={styles.qtyInput}
+                                            />
+                                        ) : (
+                                            <Pressable
+                                                onPress={() => {
+                                                    setQtyDraft(String(item.quantity));
+                                                    setQtyEditId(item.id);
+                                                }}
+                                            >
+                                                <Text style={styles.qtyText}>
+                                                    {item.quantity} {item.product.unit}
+                                                </Text>
+                                            </Pressable>
+                                        )}
+                                        <Pressable
+                                            onPress={() =>
+                                                changeQuantity(item, item.quantity + 1)
+                                            }
+                                            style={styles.qtyButton}
+                                        >
+                                            <Text style={styles.qtyButtonText}>+</Text>
+                                        </Pressable>
+                                    </View>
+                                ) : (
+                                    <Text style={{ color: colors.muted, fontSize: 12 }}>
+                                        {item.quantity} {item.product.unit}
+                                        {item.status === 'missing' ? ' · no había' : ''}
+                                    </Text>
+                                )}
                             </View>
 
                             {can.edit && (
@@ -419,6 +602,168 @@ export default function ListDetail() {
                                     ))}
                                 </Card>
                             )}
+                            {members.length > 1 && expenses && (
+                                <Card style={{ gap: 10 }}>
+                                    <Text style={styles.sectionTitle}>
+                                        💸 Gastos compartidos
+                                    </Text>
+                                    <Text style={{ color: colors.muted, fontSize: 13 }}>
+                                        Cada uno anota lo que gastó y el total
+                                        se divide en partes iguales.
+                                    </Text>
+                                    <Input
+                                        label="Gasté ($)"
+                                        value={expenseAmount}
+                                        onChangeText={setExpenseAmount}
+                                        keyboardType="decimal-pad"
+                                        placeholder="0.00"
+                                    />
+                                    <Input
+                                        label="Nota (opcional)"
+                                        value={expenseNote}
+                                        onChangeText={setExpenseNote}
+                                        placeholder="Ej: carnicería"
+                                    />
+                                    <Button
+                                        title="Anotar gasto"
+                                        variant="secondary"
+                                        onPress={addExpense}
+                                    />
+
+                                    {expenses.expenses.length > 0 && (
+                                        <>
+                                            {expenses.expenses.map((expense) => (
+                                                <View
+                                                    key={expense.id}
+                                                    style={styles.itemRow}
+                                                >
+                                                    <Text style={{ flexShrink: 1 }}>
+                                                        <Text
+                                                            style={{
+                                                                fontWeight: '600',
+                                                            }}
+                                                        >
+                                                            {expense.user}
+                                                        </Text>{' '}
+                                                        puso ${expense.amount}
+                                                        {expense.note ? (
+                                                            <Text
+                                                                style={{
+                                                                    color: colors.muted,
+                                                                }}
+                                                            >
+                                                                {' '}
+                                                                · {expense.note}
+                                                            </Text>
+                                                        ) : null}
+                                                    </Text>
+                                                    <Pressable
+                                                        onPress={() =>
+                                                            confirmAction(
+                                                                '¿Quitar este gasto?',
+                                                                async () => {
+                                                                    await api(
+                                                                        `/expenses/${expense.id}`,
+                                                                        {
+                                                                            method: 'DELETE',
+                                                                        },
+                                                                    );
+                                                                    load();
+                                                                },
+                                                            )
+                                                        }
+                                                        hitSlop={6}
+                                                    >
+                                                        <Text
+                                                            style={{
+                                                                color: colors.danger,
+                                                                fontSize: 12,
+                                                            }}
+                                                        >
+                                                            Quitar
+                                                        </Text>
+                                                    </Pressable>
+                                                </View>
+                                            ))}
+
+                                            <View style={styles.expenseSummary}>
+                                                <Text style={{ fontSize: 13 }}>
+                                                    Total{' '}
+                                                    <Text
+                                                        style={{
+                                                            fontWeight: '800',
+                                                        }}
+                                                    >
+                                                        ${expenses.total}
+                                                    </Text>{' '}
+                                                    · a cada uno le toca{' '}
+                                                    <Text
+                                                        style={{
+                                                            fontWeight: '800',
+                                                        }}
+                                                    >
+                                                        ${expenses.share}
+                                                    </Text>
+                                                </Text>
+                                                {expenses.balances.map((balance) => (
+                                                    <View
+                                                        key={balance.user_id}
+                                                        style={styles.itemRow}
+                                                    >
+                                                        <Text
+                                                            style={{ fontSize: 13 }}
+                                                        >
+                                                            {balance.name}
+                                                        </Text>
+                                                        <Text
+                                                            style={{
+                                                                fontSize: 13,
+                                                                fontWeight: '600',
+                                                                color:
+                                                                    balance.balance >= 0
+                                                                        ? colors.primary
+                                                                        : colors.danger,
+                                                            }}
+                                                        >
+                                                            puso ${balance.paid} (
+                                                            {balance.balance >= 0
+                                                                ? '+'
+                                                                : ''}
+                                                            {balance.balance})
+                                                        </Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+
+                                            {expenses.transfers.length > 0 ? (
+                                                expenses.transfers.map(
+                                                    (transfer, index) => (
+                                                        <Text
+                                                            key={index}
+                                                            style={
+                                                                styles.transferPhrase
+                                                            }
+                                                        >
+                                                            👉 {transfer.phrase}
+                                                        </Text>
+                                                    ),
+                                                )
+                                            ) : (
+                                                <Text
+                                                    style={{
+                                                        color: colors.primary,
+                                                        fontWeight: '600',
+                                                        fontSize: 13,
+                                                    }}
+                                                >
+                                                    ✓ Cuentas saldadas, nadie debe
+                                                    nada.
+                                                </Text>
+                                            )}
+                                        </>
+                                    )}
+                                </Card>
+                            )}
                             {can.share && (
                                 <Card style={{ gap: 10 }}>
                                     <Text style={styles.sectionTitle}>
@@ -433,12 +778,49 @@ export default function ListDetail() {
                                                 </Text>
                                             </Text>
                                             <View style={styles.itemActions}>
-                                                <Badge
-                                                    text={
-                                                        roleLabels[member.role] ??
-                                                        member.role
-                                                    }
-                                                />
+                                                {member.id === list.owner_id ? (
+                                                    <Badge
+                                                        text={
+                                                            roleLabels[member.role] ??
+                                                            member.role
+                                                        }
+                                                    />
+                                                ) : (
+                                                    <Pressable
+                                                        onPress={async () => {
+                                                            // Toca para alternar Editor ↔ Solo lectura.
+                                                            await api(
+                                                                `/lists/${list.id}/share`,
+                                                                {
+                                                                    method: 'POST',
+                                                                    body: {
+                                                                        email: member.email,
+                                                                        role:
+                                                                            member.role ===
+                                                                            'list-editor'
+                                                                                ? 'list-viewer'
+                                                                                : 'list-editor',
+                                                                    },
+                                                                },
+                                                            );
+                                                            load();
+                                                        }}
+                                                        hitSlop={6}
+                                                        style={styles.roleToggle}
+                                                    >
+                                                        <Text
+                                                            style={{
+                                                                color: colors.primary,
+                                                                fontSize: 12,
+                                                                fontWeight: '600',
+                                                            }}
+                                                        >
+                                                            {roleLabels[member.role] ??
+                                                                member.role}{' '}
+                                                            ⇄
+                                                        </Text>
+                                                    </Pressable>
+                                                )}
                                                 {member.id !== list.owner_id && (
                                                     <Pressable
                                                         onPress={() =>
@@ -581,8 +963,67 @@ const styles = StyleSheet.create({
     deleteButton: {
         padding: 6,
     },
+    qtyRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 4,
+    },
+    qtyButton: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        backgroundColor: colors.primarySoft,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    qtyButtonText: {
+        color: colors.primary,
+        fontSize: 16,
+        fontWeight: '700',
+        lineHeight: 20,
+    },
+    qtyText: {
+        color: colors.muted,
+        fontSize: 13,
+        textDecorationLine: 'underline',
+        textDecorationStyle: 'dotted',
+    },
+    qtyInput: {
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 8,
+        paddingVertical: 2,
+        paddingHorizontal: 8,
+        minWidth: 56,
+        fontSize: 13,
+        color: colors.text,
+        backgroundColor: colors.card,
+    },
     sectionTitle: {
         fontSize: 16,
         fontWeight: '700',
+    },
+    roleToggle: {
+        backgroundColor: colors.primarySoft,
+        borderRadius: 999,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+    },
+    expenseSummary: {
+        backgroundColor: colors.background,
+        borderRadius: 12,
+        padding: 10,
+        gap: 4,
+    },
+    transferPhrase: {
+        backgroundColor: colors.warningSoft,
+        color: colors.warning,
+        borderRadius: 10,
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+        fontSize: 13,
+        fontWeight: '600',
+        overflow: 'hidden',
     },
 });

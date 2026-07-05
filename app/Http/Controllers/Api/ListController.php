@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ShoppingList;
+use App\Services\ExpenseSplitter;
 use App\Services\ListSharing;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,7 +41,7 @@ class ListController extends Controller
             'name' => $data['name'],
             'recurrence_days' => $data['recurrence_days'] ?? null,
             'next_recurrence_at' => isset($data['recurrence_days'])
-                ? now()->addDays($data['recurrence_days'])
+                ? now()->addDays((int) $data['recurrence_days'])
                 : null,
         ]);
 
@@ -60,6 +61,7 @@ class ListController extends Controller
             'items' => $list->items()->with('product')->orderBy('created_at')->get(),
             'members' => $list->members()->get(),
             'my_role' => ListSharing::roleOn($user, $list),
+            'expenses' => ExpenseSplitter::settle($list),
             'can' => [
                 'edit' => $user->can('update', $list),
                 'share' => $user->can('share', $list),
@@ -77,7 +79,8 @@ class ListController extends Controller
             'recurrence_days' => ['nullable', 'integer', 'min:1', 'max:365'],
         ]);
 
-        $recurrence = $data['recurrence_days'] ?? null;
+        // Clientes pueden mandar el número como string y addDays() exige int.
+        $recurrence = isset($data['recurrence_days']) ? (int) $data['recurrence_days'] : null;
 
         $list->update([
             'name' => $data['name'],
@@ -99,6 +102,16 @@ class ListController extends Controller
             ->delete();
 
         $list->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function reset(Request $request, ShoppingList $list)
+    {
+        $this->authorize('update', $list);
+
+        // Nuevo ciclo de compra: todo vuelve a pendiente sin tocar la alacena.
+        $list->items()->update(['status' => 'pending', 'checked_at' => null]);
 
         return response()->json(['ok' => true]);
     }

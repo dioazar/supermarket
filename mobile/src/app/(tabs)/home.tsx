@@ -1,4 +1,4 @@
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
     Pressable,
@@ -38,7 +38,7 @@ type HomeData = {
         address: string | null;
         prices: Record<string, { price: number | null; on_sale: boolean }>;
     }[];
-    categories: { id: number; name: string }[];
+    categories: { id: number; name: string; parent_id: number | null }[];
 };
 
 export default function Home() {
@@ -74,9 +74,14 @@ export default function Home() {
 
         let items = data.pantry.filter((item) => statuses.includes(item.status));
         if (categoryId) {
-            items = items.filter(
-                (item) => String(item.category_id ?? '') === categoryId,
-            );
+            // Una categoría madre incluye sus subcategorías.
+            const ids = new Set([
+                categoryId,
+                ...data.categories
+                    .filter((c) => String(c.parent_id ?? '') === categoryId)
+                    .map((c) => String(c.id)),
+            ]);
+            items = items.filter((item) => ids.has(String(item.category_id ?? '')));
         }
 
         if (!store) return { visible: items, unavailable: [], total: null };
@@ -180,10 +185,17 @@ export default function Home() {
                     value={categoryId}
                     options={[
                         { value: '', label: 'Todas las categorías' },
-                        ...data.categories.map((category) => ({
-                            value: String(category.id),
-                            label: category.name,
-                        })),
+                        ...data.categories
+                            .filter((category) => !category.parent_id)
+                            .flatMap((parent) => [
+                                { value: String(parent.id), label: parent.name },
+                                ...data.categories
+                                    .filter((c) => c.parent_id === parent.id)
+                                    .map((child) => ({
+                                        value: String(child.id),
+                                        label: `  ↳ ${child.name}`,
+                                    })),
+                            ]),
                     ]}
                     onChange={setCategoryId}
                     visible={categoryPickerOpen}
@@ -285,6 +297,24 @@ export default function Home() {
                     {unavailable.map((item) => item.product.name).join(' · ')}
                 </Text>
             )}
+
+            {/* Accesos a catálogo */}
+            <View style={styles.shortcutRow}>
+                <Pressable
+                    style={styles.shortcut}
+                    onPress={() => router.push('/categories' as never)}
+                >
+                    <Text style={{ fontSize: 22 }}>🏷️</Text>
+                    <Text style={styles.shortcutText}>Categorías</Text>
+                </Pressable>
+                <Pressable
+                    style={styles.shortcut}
+                    onPress={() => router.push('/products' as never)}
+                >
+                    <Text style={{ fontSize: 22 }}>📦</Text>
+                    <Text style={styles.shortcutText}>Productos</Text>
+                </Pressable>
+            </View>
         </ScrollView>
     );
 }
@@ -306,6 +336,27 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 8,
+    },
+    shortcutRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 4,
+    },
+    shortcut: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: colors.card,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 14,
+        paddingVertical: 14,
+    },
+    shortcutText: {
+        fontWeight: '700',
+        color: colors.text,
     },
     chip: {
         flexDirection: 'row',

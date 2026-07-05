@@ -26,6 +26,11 @@ class ShoppingList extends Model
         return $this->hasMany(ListItem::class);
     }
 
+    public function expenses(): HasMany
+    {
+        return $this->hasMany(Expense::class);
+    }
+
     /**
      * Lists where the user has any role (owner/editor/viewer), via
      * spatie's team-scoped model_has_roles (team_id = shopping_list id).

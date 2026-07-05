@@ -5,16 +5,19 @@ import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
 import { Head, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
+import StoresMap from '@/Components/StoresMap';
 
 function formatDistance(km) {
     if (km === null || km === undefined) return null;
     return km < 1 ? `a ${Math.round(km * 1000)} m` : `a ${km.toFixed(1)} km`;
 }
 
-function NearbySection({ existingNames }) {
+function NearbySection({ existingNames, stores }) {
     const [places, setPlaces] = useState(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
+    const [center, setCenter] = useState(null);
+    const [view, setView] = useState('map');
 
     const search = () => {
         if (!navigator.geolocation) {
@@ -26,6 +29,10 @@ function NearbySection({ existingNames }) {
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 try {
+                    setCenter({
+                        lat: position.coords.latitude,
+                        lng: position.coords.longitude,
+                    });
                     const response = await fetch(
                         route('stores.nearby') +
                             `?lat=${position.coords.latitude}&lng=${position.coords.longitude}`,
@@ -84,6 +91,31 @@ function NearbySection({ existingNames }) {
                 </p>
             )}
             {places && places.length > 0 && (
+                <div className="mt-3 flex gap-2">
+                    <button
+                        onClick={() => setView('map')}
+                        className={`rounded-full px-3 py-1 text-xs font-medium ${view === 'map' ? 'bg-emerald-600 text-white' : 'bg-stone-100 text-stone-600'}`}
+                    >
+                        🗺️ Mapa
+                    </button>
+                    <button
+                        onClick={() => setView('list')}
+                        className={`rounded-full px-3 py-1 text-xs font-medium ${view === 'list' ? 'bg-emerald-600 text-white' : 'bg-stone-100 text-stone-600'}`}
+                    >
+                        ☰ Lista
+                    </button>
+                </div>
+            )}
+            {places && places.length > 0 && view === 'map' && center && (
+                <StoresMap
+                    center={center}
+                    places={places}
+                    stores={stores}
+                    onAdd={add}
+                    addedNames={existingNames}
+                />
+            )}
+            {places && places.length > 0 && view === 'list' && (
                 <ul className="mt-3 max-h-80 divide-y divide-gray-100 overflow-y-auto">
                     {places.map((place) => {
                         const added = existingNames.includes(place.name);
@@ -285,7 +317,7 @@ export default function Index({ stores, products }) {
                     <PrimaryButton disabled={processing}>Crear</PrimaryButton>
                 </form>
 
-                <NearbySection existingNames={stores.map((s) => s.name)} />
+                <NearbySection existingNames={stores.map((s) => s.name)} stores={stores} />
 
                 {stores.map((store) => (
                     <div

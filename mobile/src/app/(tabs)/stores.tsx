@@ -9,6 +9,8 @@ import {
     Text,
     View,
 } from 'react-native';
+
+import { MapView, Marker as MapMarker } from '../../components/native-map';
 import {
     Button,
     Card,
@@ -54,6 +56,7 @@ export default function Stores() {
     const [coords, setCoords] = useState<Coords | null>(null);
     const [locating, setLocating] = useState(false);
     const [nearby, setNearby] = useState<NearbyPlace[] | null>(null);
+    const [searchCenter, setSearchCenter] = useState<Coords | null>(null);
     const [searchingNearby, setSearchingNearby] = useState(false);
     const [nearbyError, setNearbyError] = useState('');
 
@@ -108,6 +111,7 @@ export default function Stores() {
             setSearchingNearby(false);
             return;
         }
+        setSearchCenter(position);
         try {
             const data = await api<{ places: NearbyPlace[] }>(
                 `/stores/nearby?lat=${position.lat}&lng=${position.lng}`,
@@ -240,6 +244,40 @@ export default function Stores() {
                             <Text style={{ color: colors.danger, fontSize: 13 }}>
                                 {nearbyError}
                             </Text>
+                        )}
+                        {nearby && nearby.length > 0 && MapView && searchCenter && (
+                            <View style={{ height: 260, borderRadius: 14, overflow: 'hidden' }}>
+                                <MapView
+                                    style={{ flex: 1 }}
+                                    initialRegion={{
+                                        latitude: searchCenter.lat,
+                                        longitude: searchCenter.lng,
+                                        latitudeDelta: 0.015,
+                                        longitudeDelta: 0.015,
+                                    }}
+                                >
+                                    {nearby.map((place) => (
+                                        <MapMarker
+                                            key={`${place.source}-${place.external_id}`}
+                                            coordinate={{
+                                                latitude: place.lat,
+                                                longitude: place.lng,
+                                            }}
+                                            title={place.name}
+                                            description={place.address ?? undefined}
+                                            pinColor={
+                                                stores?.some((s) => s.name === place.name)
+                                                    ? '#059669'
+                                                    : '#e11d48'
+                                            }
+                                            onCalloutPress={() => addNearby(place)}
+                                        />
+                                    ))}
+                                </MapView>
+                                <Text style={{ color: colors.muted, fontSize: 11, padding: 4 }}>
+                                    Tocá el globo de un marcador para agregarlo
+                                </Text>
+                            </View>
                         )}
                         {nearby && nearby.length === 0 && (
                             <Text style={{ color: colors.muted, fontSize: 13 }}>

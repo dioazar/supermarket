@@ -20,7 +20,9 @@ class PantryController extends Controller
 
         return Inertia::render('Pantry/Index', [
             'items' => $items,
-            'products' => Product::orderBy('name')->get(['id', 'name', 'unit']),
+            'products' => Product::ownedBy($request->user())
+                ->orderBy('name')
+                ->get(['id', 'name', 'unit']),
             'categories' => Category::where('user_id', $request->user()->id)->orderBy('name')->get(),
         ]);
     }
@@ -49,8 +51,8 @@ class PantryController extends Controller
         }
 
         $product = isset($data['product_id'])
-            ? Product::findOrFail($data['product_id'])
-            : Product::firstOrCreate(['name' => trim($data['product_name'])]);
+            ? Product::ownedBy($request->user())->findOrFail($data['product_id'])
+            : Product::findOrCreateFor($request->user(), $data['product_name']);
 
         PantryItem::updateOrCreate(
             ['user_id' => $request->user()->id, 'product_id' => $product->id],

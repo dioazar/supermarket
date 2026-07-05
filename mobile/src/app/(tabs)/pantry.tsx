@@ -2,6 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
     FlatList,
+    Image,
     Pressable,
     RefreshControl,
     StyleSheet,
@@ -19,6 +20,12 @@ import {
 } from '../../components/ui-kit';
 import { api } from '../../lib/api';
 import { colors } from '../../lib/theme';
+import {
+    buildCategoryRows,
+    CategoryHeader,
+    categoryOptions,
+    toggleSection,
+} from '../../components/category-sections';
 
 type PantryItem = {
     id: number;
@@ -27,10 +34,10 @@ type PantryItem = {
     status: 'green' | 'yellow' | 'red';
     category_id: number | null;
     category: { id: number; name: string } | null;
-    product: { id: number; name: string; unit: string };
+    product: { id: number; name: string; unit: string; image_url?: string | null };
 };
 
-type Category = { id: number; name: string };
+type Category = { id: number; name: string; parent_id: number | null };
 
 const STATUS_META = {
     green: { label: 'Tengo', dot: '#059669', soft: colors.primarySoft, fg: colors.primaryDark },
@@ -53,6 +60,7 @@ export default function Pantry() {
     const [newCategory, setNewCategory] = useState('');
     const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
     const [statusFilter, setStatusFilter] = useState('');
+    const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
     const load = useCallback(async () => {
         const [pantry, allProducts, allCategories] = await Promise.all([
@@ -114,12 +122,25 @@ export default function Pantry() {
 
     if (items === null) return <Loading />;
 
+    const visible = items.filter(
+        (item) => !statusFilter || item.status === statusFilter,
+    );
+
+    // Con filtro de estado activo se muestran todas las coincidencias, aun colapsadas.
+    const rows = buildCategoryRows({
+        items: visible,
+        categories,
+        categoryIdOf: (item) => item.category_id,
+        nameOf: (item) => item.product.name,
+        keyOf: (item) => item.id,
+        collapsed,
+        expandAll: statusFilter !== '',
+    });
+
     return (
         <FlatList
-            data={items.filter(
-                (item) => !statusFilter || item.status === statusFilter,
-            )}
-            keyExtractor={(item) => String(item.id)}
+            data={rows}
+            keyExtractor={(row) => row.key}
             contentContainerStyle={styles.container}
             refreshControl={
                 <RefreshControl
@@ -173,10 +194,7 @@ export default function Pantry() {
                                 value={categoryId}
                                 options={[
                                     { value: '', label: '— sin categoría —' },
-                                    ...categories.map((category) => ({
-                                        value: String(category.id),
-                                        label: category.name,
-                                    })),
+                                    ...categoryOptions(categories),
                                     { value: '__new__', label: '+ Nueva categoría…' },
                                 ]}
                                 onChange={setCategoryId}
@@ -251,7 +269,23 @@ export default function Pantry() {
                 </View>
             }
             ListEmptyComponent={<EmptyState text="Tu despensa está vacía." />}
-            renderItem={({ item }) => {
+            renderItem={({ item: row }) => {
+                if (row.type !== 'item') {
+                    return (
+                        <CategoryHeader
+                            name={row.name}
+                            count={row.count}
+                            level={row.type}
+                            collapsed={collapsed.has(row.key)}
+                            onToggle={() =>
+                                setCollapsed((current) =>
+                                    toggleSection(current, row.key),
+                                )
+                            }
+                        />
+                    );
+                }
+                const item = row.item;
                 const meta = STATUS_META[item.status];
                 return (
                     <Card
@@ -262,7 +296,13 @@ export default function Pantry() {
                         }}
                     >
                         <View style={styles.row}>
-                            <View style={{ flexShrink: 1 }}>
+                            {item.product.image_url && (
+                                <Image
+                                    source={{ uri: item.product.image_url }}
+                                    style={{ width: 40, height: 40, borderRadius: 8 }}
+                                />
+                            )}
+                            <View style={{ flexShrink: 1, flex: 1 }}>
                                 <Text style={styles.name}>{item.product.name}</Text>
                                 <Text style={{ color: colors.muted, fontSize: 12 }}>
                                     mínimo {item.min_quantity} {item.product.unit}

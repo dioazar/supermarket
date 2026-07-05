@@ -28,6 +28,27 @@ class ListSharing
         return $role;
     }
 
+    /** Usuarios con los que el usuario comparte (o le compartieron) alguna lista. */
+    public static function friendsOf(User $user)
+    {
+        $teamKey = config('permission.column_names.team_foreign_key');
+
+        $myListIds = \Illuminate\Support\Facades\DB::table('model_has_roles')
+            ->where('model_type', User::class)
+            ->where('model_id', $user->id)
+            ->pluck($teamKey);
+
+        $friendIds = \Illuminate\Support\Facades\DB::table('model_has_roles')
+            ->where('model_type', User::class)
+            ->whereIn($teamKey, $myListIds)
+            ->where('model_id', '!=', $user->id)
+            ->distinct()
+            ->pluck('model_id');
+
+        return User::whereIn('id', $friendIds)->orderBy('name')
+            ->get(['id', 'name', 'email', 'avatar_path']);
+    }
+
     private static function withTeam(ShoppingList $list, callable $callback)
     {
         $previousTeamId = getPermissionsTeamId();

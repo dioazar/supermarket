@@ -7,12 +7,13 @@ import {
 } from 'react';
 import { api, getToken, setToken } from './api';
 
-type User = { id: number; name: string; email: string };
+type User = { id: number; name: string; email: string; avatar_url?: string | null };
 
 type AuthContextValue = {
     user: User | null;
     loading: boolean;
     login: (email: string, password: string) => Promise<void>;
+    loginWithToken: (token: string) => Promise<void>;
     register: (name: string, email: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
 };
@@ -46,6 +47,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user);
     };
 
+    // Para el login con Google: el backend redirige con un token Sanctum ya emitido.
+    const loginWithToken = async (token: string) => {
+        await setToken(token);
+        setUser(await api<User>('/user'));
+    };
+
     const register = async (name: string, email: string, password: string) => {
         const data = await api<{ token: string; user: User }>('/register', {
             method: 'POST',
@@ -66,7 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+        <AuthContext.Provider
+            value={{ user, loading, login, loginWithToken, register, logout }}
+        >
             {children}
         </AuthContext.Provider>
     );

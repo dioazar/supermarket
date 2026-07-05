@@ -38,8 +38,13 @@ class DemoSeeder extends Seeder
             ['name' => 'Detergente', 'category' => 'Limpieza', 'unit' => 'un'],
             ['name' => 'Manzanas', 'category' => 'Verdulería', 'unit' => 'kg'],
             ['name' => 'Tomates', 'category' => 'Verdulería', 'unit' => 'kg'],
-        ])->mapWithKeys(function ($data) {
-            return [$data['name'] => Product::firstOrCreate(['name' => $data['name']], $data)];
+        ])->mapWithKeys(function ($data) use ($demo) {
+            return [
+                $data['name'] => Product::findOrCreateFor($demo, $data['name'], [
+                    'category' => $data['category'],
+                    'unit' => $data['unit'],
+                ]),
+            ];
         });
 
         // Tiendas del usuario demo, con precios distintos
@@ -126,9 +131,10 @@ class DemoSeeder extends Seeder
         ListSharing::setRole($ana, $asado, 'list-owner');
         ListSharing::setRole($demo, $asado, 'list-viewer');
 
+        // La lista es de Ana: los ítems usan el vocabulario (productos) de Ana.
         foreach (['Tomates' => 1, 'Pan' => 2, 'Detergente' => 1] as $name => $qty) {
             $asado->items()->updateOrCreate(
-                ['product_id' => $products[$name]->id],
+                ['product_id' => Product::findOrCreateFor($ana, $name)->id],
                 ['quantity' => $qty, 'added_by' => $ana->id]
             );
         }

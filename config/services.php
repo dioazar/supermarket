@@ -16,6 +16,10 @@ return [
 
     'google' => [
         'maps_key' => env('GOOGLE_MAPS_API_KEY'),
+        // OAuth (login con Google vía Socialite)
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI', env('APP_URL').'/auth/google/callback'),
     ],
 
     'nearby_stores' => [

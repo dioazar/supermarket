@@ -17,6 +17,12 @@ export default function RootLayout() {
                 <Stack.Screen name="login" options={{ headerShown: false }} />
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="list/[id]" options={{ title: 'Lista' }} />
+                <Stack.Screen name="profile" options={{ title: 'Mi perfil' }} />
+                <Stack.Screen
+                    name="categories"
+                    options={{ title: 'Mis categorías' }}
+                />
+                <Stack.Screen name="products" options={{ title: 'Productos' }} />
             </Stack>
         </AuthProvider>
     );

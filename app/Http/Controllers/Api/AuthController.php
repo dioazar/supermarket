@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\AccountSeeder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -20,6 +21,12 @@ class AuthController extends Controller
 
         $user = User::where('email', $data['email'])->first();
 
+        if ($user && $user->password === null) {
+            throw ValidationException::withMessages([
+                'email' => 'Esta cuenta entra con Google: usá "Continuar con Google".',
+            ]);
+        }
+
         if (! $user || ! Hash::check($data['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'email' => 'Credenciales incorrectas.',
@@ -28,7 +35,7 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $user->createToken($data['device_name'])->plainTextToken,
-            'user' => $user->only('id', 'name', 'email'),
+            'user' => $user->only('id', 'name', 'email', 'avatar_url'),
         ]);
     }
 
@@ -47,9 +54,11 @@ class AuthController extends Controller
             'password' => Hash::make($data['password']),
         ]);
 
+        AccountSeeder::seed($user);
+
         return response()->json([
             'token' => $user->createToken($data['device_name'])->plainTextToken,
-            'user' => $user->only('id', 'name', 'email'),
+            'user' => $user->only('id', 'name', 'email', 'avatar_url'),
         ], 201);
     }
 
@@ -62,6 +71,6 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
-        return response()->json($request->user()->only('id', 'name', 'email'));
+        return response()->json($request->user()->only('id', 'name', 'email', 'avatar_url'));
     }
 }

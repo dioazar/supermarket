@@ -51,8 +51,8 @@ class StoreController extends Controller
         ]);
 
         $product = isset($data['product_id'])
-            ? Product::findOrFail($data['product_id'])
-            : Product::firstOrCreate(['name' => trim($data['product_name'])]);
+            ? Product::ownedBy($request->user())->findOrFail($data['product_id'])
+            : Product::findOrCreateFor($request->user(), $data['product_name']);
 
         $store->products()->syncWithoutDetaching([
             $product->id => [

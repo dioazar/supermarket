@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 
 const STATUS_META = {
     green: { label: 'Tengo', dot: 'bg-emerald-500', chip: 'bg-emerald-100 text-emerald-800', row: 'bg-white' },
@@ -44,8 +44,15 @@ export default function Dashboard({ pantry, stores, categories, lists }) {
     const { visible, unavailable, total } = useMemo(() => {
         let items = pantry.filter((item) => statuses.includes(item.status));
         if (categoryId) {
-            items = items.filter(
-                (item) => String(item.category_id ?? '') === categoryId,
+            // Una categoría madre incluye sus subcategorías.
+            const ids = new Set([
+                categoryId,
+                ...categories
+                    .filter((c) => String(c.parent_id ?? '') === categoryId)
+                    .map((c) => String(c.id)),
+            ]);
+            items = items.filter((item) =>
+                ids.has(String(item.category_id ?? '')),
             );
         }
 
@@ -66,7 +73,7 @@ export default function Dashboard({ pantry, stores, categories, lists }) {
             unavailable: missing,
             total: Math.round(sum * 100) / 100,
         };
-    }, [pantry, statuses, categoryId, store]);
+    }, [pantry, statuses, categoryId, store, categories]);
 
     const counts = {
         green: pantry.filter((i) => i.status === 'green').length,
@@ -122,14 +129,32 @@ export default function Dashboard({ pantry, stores, categories, lists }) {
                                 onChange={(e) => setCategoryId(e.target.value)}
                             >
                                 <option value="">Todas las categorías</option>
-                                {categories.map((category) => (
-                                    <option
-                                        key={category.id}
-                                        value={String(category.id)}
-                                    >
-                                        {category.name}
-                                    </option>
-                                ))}
+                                {categories
+                                    .filter((category) => !category.parent_id)
+                                    .map((parent) => (
+                                        <Fragment key={parent.id}>
+                                            <option value={String(parent.id)}>
+                                                {parent.name}
+                                            </option>
+                                            {categories
+                                                .filter(
+                                                    (c) =>
+                                                        c.parent_id ===
+                                                        parent.id,
+                                                )
+                                                .map((child) => (
+                                                    <option
+                                                        key={child.id}
+                                                        value={String(
+                                                            child.id,
+                                                        )}
+                                                    >
+                                                        {'  ↳ '}
+                                                        {child.name}
+                                                    </option>
+                                                ))}
+                                        </Fragment>
+                                    ))}
                             </select>
                         )}
                     </div>

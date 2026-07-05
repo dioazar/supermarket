@@ -22,11 +22,18 @@ class ListItemController extends Controller
         ]);
 
         $product = isset($data['product_id'])
-            ? Product::findOrFail($data['product_id'])
-            : Product::firstOrCreate(['name' => trim($data['product_name'])]);
+            ? Product::ownedBy($request->user())->findOrFail($data['product_id'])
+            : Product::findOrCreateFor($request->user(), $data['product_name']);
+
+        // En listas compartidas cada miembro usa su vocabulario: si otro ya
+        // agregó un producto equivalente (mismo canónico), se pisa ese ítem
+        // en vez de duplicar "Leche" y "leche".
+        $existing = $list->items()
+            ->whereRelation('product', 'canonical_product_id', $product->canonical_product_id)
+            ->first();
 
         $item = $list->items()->updateOrCreate(
-            ['product_id' => $product->id],
+            ['product_id' => $existing->product_id ?? $product->id],
             [
                 'quantity' => $data['quantity'] ?? 1,
                 'added_by' => $request->user()->id,

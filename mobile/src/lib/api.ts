@@ -39,6 +39,44 @@ export class ApiError extends Error {
     }
 }
 
+/** Sube un archivo (imagen) como multipart/form-data. */
+export async function apiUpload<T = any>(
+    path: string,
+    field: string,
+    file: { uri: string; name?: string; mimeType?: string },
+): Promise<T> {
+    const token = await getToken();
+    const form = new FormData();
+
+    if (Platform.OS === 'web') {
+        const blob = await (await fetch(file.uri)).blob();
+        form.append(field, blob, file.name ?? 'photo.jpg');
+    } else {
+        form.append(field, {
+            uri: file.uri,
+            name: file.name ?? 'photo.jpg',
+            type: file.mimeType ?? 'image/jpeg',
+        } as any);
+    }
+
+    const response = await fetch(`${API_URL}${path}`, {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: form,
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        throw new ApiError(response.status, data.message ?? `Error ${response.status}`, data.errors);
+    }
+
+    return data as T;
+}
+
 export async function api<T = any>(
     path: string,
     options: { method?: string; body?: object } = {},

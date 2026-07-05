@@ -17,7 +17,6 @@ import {
     Loading,
 } from '../../components/ui-kit';
 import { api } from '../../lib/api';
-import { useAuth } from '../../lib/auth';
 import { colors, roleLabels } from '../../lib/theme';
 
 type ListSummary = {
@@ -31,7 +30,6 @@ type ListSummary = {
 };
 
 export default function Lists() {
-    const { logout } = useAuth();
     const [lists, setLists] = useState<ListSummary[] | null>(null);
     const [refreshing, setRefreshing] = useState(false);
     const [creating, setCreating] = useState(false);
@@ -114,11 +112,6 @@ export default function Lists() {
                 </View>
             }
             ListEmptyComponent={<EmptyState text="No tenés listas todavía." />}
-            ListFooterComponent={
-                <View style={{ marginTop: 24 }}>
-                    <Button title="Cerrar sesión" variant="ghost" onPress={logout} />
-                </View>
-            }
             renderItem={({ item }) => {
                 const progress = item.items_count
                     ? item.checked_count / item.items_count

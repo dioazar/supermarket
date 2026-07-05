@@ -5,12 +5,14 @@ con **app móvil React Native (Expo)** en `mobile/` que consume la API REST (San
 
 ## Correr el proyecto
 
+Con **Valet** ya configurado: entrá directo a **http://lista-supermercado.test** ✨
+(el PHP default de la terminal ya es 8.5; si una terminal vieja muestra 8.1, corré `source ~/.zshrc`).
+
 ```bash
 # MySQL (Homebrew) tiene que estar corriendo
 brew services start mysql@8.0
 
-# Backend (PHP 8.5 de Homebrew)
-export PATH="/usr/local/opt/php/bin:$PATH"
+# Alternativa a valet:
 php artisan serve
 
 # Frontend en desarrollo (opcional; ya hay build de producción en public/build)
@@ -73,6 +75,21 @@ También se pueden registrar usuarios nuevos en `/register`.
   (campo `website` por tienda). La v2 (carrito automático + push) está en `ROADMAP.md`.
 
 Ver **`ROADMAP.md`** para el backlog completo de ideas (UX, negocio, monetización, seguridad).
+
+## Perfil, imágenes, gastos y mapa
+
+- **Fotos de perfil, categorías y productos**: subidas al disco público y achicadas con
+  `spatie/image` (`app/Services/ImageStorage.php`, avatares 256px, productos 512px).
+- **Gastos compartidos (splitwise)**: cada miembro anota lo que gastó en la lista; el total se
+  divide en partes iguales y `app/Services/ExpenseSplitter.php` simplifica deudas
+  ("Ana le tiene que dar $3000 a Demo").
+- **Amigos**: `GET /api/friends` (gente con la que compartís listas) + chips de acceso rápido al compartir.
+- **Mapa**: web con Leaflet/OpenStreetMap en Tiendas (markers + agregar desde popup);
+  app con react-native-maps (solo iOS/Android; en web se ve la lista).
+- **Secciones Categorías y Productos** (menú del avatar en la web) con foto/ícono.
+
+⚠️ Para probar la app en el teléfono con imágenes: poné `APP_URL=http://TU-IP-LAN:8000` en `.env`
+(el teléfono no resuelve `.test`) y levantá `php artisan serve --host=0.0.0.0`.
 
 ## App móvil (React Native + Expo)
 
