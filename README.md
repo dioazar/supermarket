@@ -5,21 +5,18 @@ con **app móvil React Native (Expo)** en `mobile/` que consume la API REST (San
 
 ## Correr el proyecto
 
-Con **Valet** ya configurado: entrá directo a **http://lista-supermercado.test** ✨
-(el PHP default de la terminal ya es 8.5; si una terminal vieja muestra 8.1, corré `source ~/.zshrc`).
+Todo en Docker (OrbStack). La base `superlista` está en el **MySQL compartido de la Mac**
+(`~/Sites/mysql`, `localhost:3306`, root sin contraseña).
 
 ```bash
-# MySQL (Homebrew) tiene que estar corriendo
-brew services start mysql@8.0
+(cd ~/Sites/mysql && docker compose up -d)   # una vez; después arranca solo con OrbStack
+docker compose up -d --build                 # web + API en :8000 y scheduler de listas recurrentes
 
-# Alternativa a valet:
-php artisan serve
+# Comandos de Laravel, adentro del contenedor
+docker compose exec app php artisan migrate
 
-# Frontend en desarrollo (opcional; ya hay build de producción en public/build)
-npm run dev
-
-# Scheduler para listas recurrentes (en otra terminal)
-php artisan schedule:work
+# Frontend: los assets compilados están en public/build. Tras tocar JSX:
+npm run build        # o `npm run dev` para desarrollo (Node de Homebrew)
 ```
 
 App en http://localhost:8000
@@ -89,7 +86,7 @@ Ver **`ROADMAP.md`** para el backlog completo de ideas (UX, negocio, monetizaci�
 - **Secciones Categorías y Productos** (menú del avatar en la web) con foto/ícono.
 
 ⚠️ Para probar la app en el teléfono con imágenes: poné `APP_URL=http://TU-IP-LAN:8000` en `.env`
-(el teléfono no resuelve `.test`) y levantá `php artisan serve --host=0.0.0.0`.
+(el contenedor ya escucha en toda la red local en el puerto 8000).
 
 ## App móvil (React Native + Expo)
 
@@ -97,8 +94,7 @@ Ver **`ROADMAP.md`** para el backlog completo de ideas (UX, negocio, monetizaci�
 cd mobile
 npm install
 
-# En el teléfono (Expo Go) — el backend tiene que escuchar en la red local:
-php artisan serve --host=0.0.0.0 --port=8000
+# En el teléfono (Expo Go): con el backend en Docker (puerto 8000) alcanza
 npx expo start            # escanear el QR con Expo Go
 
 # En el navegador (para desarrollo rápido):
@@ -117,3 +113,25 @@ backend corre en la misma compu que `expo start`, funciona sin configurar nada.
 
 `php artisan db:seed` crea roles/permisos, usuarios demo, productos, tiendas con precios,
 despensa y listas compartidas de ejemplo.
+
+## Tests
+
+```bash
+docker compose exec app php artisan test
+```
+
+Usan SQLite en memoria (`phpunit.xml` con `<server force>`), nunca la base de desarrollo.
+
+Corre toda la suite (sqlite en memoria, no toca tu base de datos) — correrla
+antes de cada commit para saber que nada se rompió. Cubre:
+
+- **`tests/Feature/Api/`**: todos los endpoints de la API, agrupados por recurso
+  (auth y cuenta pre-armada, productos con canónicos, categorías, despensa,
+  listas, ítems, compartir, tiendas, cercanos con HTTP fakeado, recomendaciones,
+  home, perfil, gastos). Incluye los casos de permisos (403/404 sobre recursos
+  ajenos) y de normalización ("LECHE" ≡ "leche").
+- **`tests/Feature/Web/`**: smoke de todas las páginas Inertia + acciones web clave.
+- **`tests/Feature/EndToEndFlowTest.php`**: recorrido completo de dos usuarios
+  (registro → lista compartida → compra → despensa → gastos → recomendaciones).
+
+Para correr un solo archivo: `php artisan test --filter=ListItemApiTest`.

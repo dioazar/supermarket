@@ -1,4 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import {
+    buildCategoryRows,
+    CategoryHeaderButton,
+    CategorySelect,
+    toggleSection,
+} from '@/Components/CategorySections';
 import InputError from '@/Components/InputError';
 import PrimaryButton from '@/Components/PrimaryButton';
 import TextInput from '@/Components/TextInput';
@@ -14,6 +20,7 @@ const STATUS_META = {
 export default function Index({ items, products, categories = [] }) {
     const [statusFilter, setStatusFilter] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
+    const [collapsed, setCollapsed] = useState(new Set());
 
     const { data, setData, post, processing, errors, reset } = useForm({
         product_id: '',
@@ -47,6 +54,24 @@ export default function Index({ items, products, categories = [] }) {
             { quantity: Math.max(0, item.quantity + delta) },
             { preserveScroll: true },
         );
+
+    const visible = items.filter(
+        (item) =>
+            (!statusFilter || item.status === statusFilter) &&
+            (!categoryFilter ||
+                String(item.category_id ?? '') === categoryFilter),
+    );
+
+    // Con filtros activos se muestran todas las coincidencias, aun colapsadas.
+    const rows = buildCategoryRows({
+        items: visible,
+        categories,
+        categoryIdOf: (item) => item.category_id,
+        nameOf: (item) => item.product.name,
+        keyOf: (item) => item.id,
+        collapsed,
+        expandAll: statusFilter !== '' || categoryFilter !== '',
+    });
 
     return (
         <AuthenticatedLayout
@@ -130,21 +155,14 @@ export default function Index({ items, products, categories = [] }) {
                         <label className="text-sm font-medium text-gray-700">
                             Categoría
                         </label>
-                        <select
-                            className="mt-1 block rounded-md border-gray-300 text-sm shadow-sm"
+                        <CategorySelect
+                            categories={categories}
                             value={data.category_id}
-                            onChange={(e) =>
-                                setData('category_id', e.target.value)
-                            }
-                        >
-                            <option value="">— sin categoría —</option>
-                            {categories.map((category) => (
-                                <option key={category.id} value={category.id}>
-                                    {category.name}
-                                </option>
-                            ))}
-                            <option value="__new__">+ Nueva categoría…</option>
-                        </select>
+                            onChange={(value) => setData('category_id', value)}
+                            extraOptions={[
+                                { value: '__new__', label: '+ Nueva categoría…' },
+                            ]}
+                        />
                     </div>
                     {data.category_id === '__new__' && (
                         <div>
@@ -204,21 +222,13 @@ export default function Index({ items, products, categories = [] }) {
                         </button>
                     ))}
                     {categories.length > 0 && (
-                        <select
-                            className="rounded-full border-gray-200 py-1.5 text-sm shadow-sm"
+                        <CategorySelect
+                            categories={categories}
                             value={categoryFilter}
-                            onChange={(e) => setCategoryFilter(e.target.value)}
-                        >
-                            <option value="">Todas las categorías</option>
-                            {categories.map((category) => (
-                                <option
-                                    key={category.id}
-                                    value={String(category.id)}
-                                >
-                                    {category.name}
-                                </option>
-                            ))}
-                        </select>
+                            onChange={setCategoryFilter}
+                            emptyLabel="Todas las categorías"
+                            className="rounded-full border-gray-200 py-1.5 text-sm shadow-sm"
+                        />
                     )}
                 </div>
 
@@ -235,20 +245,31 @@ export default function Index({ items, products, categories = [] }) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {items
-                                .filter(
-                                    (item) =>
-                                        (!statusFilter ||
-                                            item.status === statusFilter) &&
-                                        (!categoryFilter ||
-                                            String(item.category_id ?? '') ===
-                                                categoryFilter),
-                                )
-                                .map((item) => {
+                            {rows.map((row) => {
+                                if (row.type !== 'item') {
+                                    return (
+                                        <tr key={row.key} className="bg-stone-50">
+                                            <td colSpan="6" className="px-4 py-2">
+                                                <CategoryHeaderButton
+                                                    name={row.name}
+                                                    count={row.count}
+                                                    level={row.type}
+                                                    collapsed={collapsed.has(row.key)}
+                                                    onToggle={() =>
+                                                        setCollapsed((current) =>
+                                                            toggleSection(current, row.key),
+                                                        )
+                                                    }
+                                                />
+                                            </td>
+                                        </tr>
+                                    );
+                                }
+                                const item = row.item;
                                 const meta = STATUS_META[item.status];
                                 return (
                                     <tr
-                                        key={item.id}
+                                        key={row.key}
                                         className={meta.row}
                                     >
                                         <td className="px-4 py-3 font-medium text-gray-800">
@@ -294,10 +315,10 @@ export default function Index({ items, products, categories = [] }) {
                                             </span>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <select
-                                                className="rounded-md border-gray-200 py-1 text-xs shadow-sm"
+                                            <CategorySelect
+                                                categories={categories}
                                                 value={item.category_id ?? ''}
-                                                onChange={(e) =>
+                                                onChange={(value) =>
                                                     router.patch(
                                                         route(
                                                             'pantry.update',
@@ -305,25 +326,16 @@ export default function Index({ items, products, categories = [] }) {
                                                         ),
                                                         {
                                                             category_id:
-                                                                e.target.value ||
-                                                                null,
+                                                                value || null,
                                                         },
                                                         {
                                                             preserveScroll: true,
                                                         },
                                                     )
                                                 }
-                                            >
-                                                <option value="">—</option>
-                                                {categories.map((category) => (
-                                                    <option
-                                                        key={category.id}
-                                                        value={category.id}
-                                                    >
-                                                        {category.name}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                                emptyLabel="—"
+                                                className="rounded-md border-gray-200 py-1 text-xs shadow-sm"
+                                            />
                                         </td>
                                         <td className="px-4 py-3 text-right">
                                             <button

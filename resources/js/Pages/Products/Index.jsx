@@ -1,36 +1,16 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import {
+    buildCategoryRows,
+    CategoryHeaderButton,
+    CategorySelect,
+    toggleSection,
+} from '@/Components/CategorySections';
 import InputError from '@/Components/InputError';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
 import { Head, router, useForm } from '@inertiajs/react';
-import { Fragment, useState } from 'react';
-
-function CategorySelect({ categories, value, onChange }) {
-    const roots = categories.filter((category) => !category.parent_id);
-    return (
-        <select
-            className="mt-1 block rounded-md border-gray-300 text-sm shadow-sm"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-        >
-            <option value="">— sin categoría —</option>
-            {roots.map((parent) => (
-                <Fragment key={parent.id}>
-                    <option value={parent.id}>{parent.name}</option>
-                    {categories
-                        .filter((c) => c.parent_id === parent.id)
-                        .map((child) => (
-                            <option key={child.id} value={child.id}>
-                                {'  ↳ '}
-                                {child.name}
-                            </option>
-                        ))}
-                </Fragment>
-            ))}
-        </select>
-    );
-}
+import { useState } from 'react';
 
 function EditProductForm({ product, categories, onDone }) {
     const { data, setData, patch, processing, errors } = useForm({
@@ -94,6 +74,7 @@ function EditProductForm({ product, categories, onDone }) {
 export default function Index({ products, categories = [] }) {
     const [query, setQuery] = useState('');
     const [editingId, setEditingId] = useState(null);
+    const [collapsed, setCollapsed] = useState(new Set());
     const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
         unit: 'un',
@@ -121,6 +102,17 @@ export default function Index({ products, categories = [] }) {
     const visible = products.filter((product) =>
         product.name.toLowerCase().includes(query.toLowerCase()),
     );
+
+    // Con búsqueda activa se muestran todas las coincidencias, aun colapsadas.
+    const rows = buildCategoryRows({
+        items: visible,
+        categories,
+        categoryIdOf: (product) => product.category_id,
+        nameOf: (product) => product.name,
+        keyOf: (product) => product.id,
+        collapsed,
+        expandAll: query.trim() !== '',
+    });
 
     return (
         <AuthenticatedLayout
@@ -196,9 +188,33 @@ export default function Index({ products, categories = [] }) {
 
                 <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
                     <ul className="divide-y divide-stone-100">
-                        {visible.map((product) =>
-                            editingId === product.id ? (
-                                <li key={product.id}>
+                        {rows.map((row) => {
+                            if (row.type !== 'item') {
+                                return (
+                                    <li
+                                        key={row.key}
+                                        className="bg-stone-50 px-4 py-2"
+                                    >
+                                        <CategoryHeaderButton
+                                            name={row.name}
+                                            count={row.count}
+                                            level={row.type}
+                                            collapsed={collapsed.has(row.key)}
+                                            onToggle={() =>
+                                                setCollapsed((current) =>
+                                                    toggleSection(
+                                                        current,
+                                                        row.key,
+                                                    ),
+                                                )
+                                            }
+                                        />
+                                    </li>
+                                );
+                            }
+                            const product = row.item;
+                            return editingId === product.id ? (
+                                <li key={row.key}>
                                     <EditProductForm
                                         product={product}
                                         categories={categories}
@@ -207,7 +223,7 @@ export default function Index({ products, categories = [] }) {
                                 </li>
                             ) : (
                                 <li
-                                    key={product.id}
+                                    key={row.key}
                                     className="flex items-center justify-between gap-3 px-4 py-3"
                                 >
                                     <div className="flex min-w-0 items-center gap-3">
@@ -261,8 +277,8 @@ export default function Index({ products, categories = [] }) {
                                         </label>
                                     </div>
                                 </li>
-                            ),
-                        )}
+                            );
+                        })}
                         {visible.length === 0 && (
                             <li className="px-4 py-6 text-center text-sm text-stone-500">
                                 No hay productos que coincidan.

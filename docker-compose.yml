@@ -1,0 +1,28 @@
+# SuperLista en Docker (OrbStack): web + API en http://localhost:8000.
+# La base "superlista" está en el MySQL compartido de la Mac (~/Sites/mysql, localhost:3306).
+#
+#   (cd ~/Sites/mysql && docker compose up -d)   # una vez
+#   docker compose up -d --build
+services:
+  app:
+    build: docker/php
+    # public/storage relativo (el que apuntaba a la ruta de la Mac no sirve adentro del contenedor)
+    command: sh -c "[ -L public/storage ] && [ -e public/storage ] || { rm -f public/storage; ln -s ../storage/app/public public/storage; }; exec apache2-foreground"
+    ports:
+      - "8000:80"
+    volumes:
+      - .:/var/www/html
+    networks: [default, shared-mysql]
+
+  # Tareas programadas: listas recurrentes todos los días a las 6
+  scheduler:
+    build: docker/php
+    command: php artisan schedule:work
+    volumes:
+      - .:/var/www/html
+    networks: [default, shared-mysql]
+
+networks:
+  # MySQL compartido en localhost:3306
+  shared-mysql:
+    external: true
